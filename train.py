@@ -1,17 +1,5 @@
-import os
-import time
-from torch.utils.data import DataLoader, Dataset
-from torchvision.datasets import ImageFolder
-import torchvision.transforms as tt
-import torch
-import torch.nn as nn
 from tqdm.notebook import tqdm
-from torchvision.utils import save_image
-from torchvision.utils import make_grid
-import numpy as np
-import matplotlib.pyplot as plt
-#import seaborn as sns
-import os
+
 from model import *
 from data import *
 from utils import *
@@ -22,13 +10,13 @@ device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cp
 batch_size = 128
 latent_size = 128
 
-def fit(model, optimizer, epochs, lr, Buffer, save=False, name = None, mode="kaggle"):
+def fit(model, optimizer, epochs, lr, Buffer, path_dataset, save=False, name = None, mode="kaggle"):
 
 	model["discriminator"].train()
 	model["generator"].train()
 	torch.cuda.empty_cache()
 
-	train_dl = get_dataloader((128, 128), batch_size)
+	train_dl = get_dataloader((128, 128), path_dataset, batch_size)
 
 	# Losses & scores
 	losses_g = []
@@ -36,7 +24,7 @@ def fit(model, optimizer, epochs, lr, Buffer, save=False, name = None, mode="kag
 	real_scores = []
 	fake_scores = []
 
-	criterion = nn.BCEWithLogitsLoss()
+	criterion = nn.BCELoss()
 
 	for epoch in range(epochs):
 
@@ -96,9 +84,6 @@ def fit(model, optimizer, epochs, lr, Buffer, save=False, name = None, mode="kag
 
 			loss_g_per_epoch.append(loss_g.item())
 
-		#       scheduller["generator"].step()
-		#       scheduller["discriminator"].step()
-
 		toc = time.time()
 		min = (toc - tic) // 60
 		sec = round((toc - tic) % 60, 2)
@@ -142,16 +127,19 @@ def fit(model, optimizer, epochs, lr, Buffer, save=False, name = None, mode="kag
 
 	return losses_g, losses_d, real_scores, fake_scores
 
-def train():
+def train(epochs, path_dataset, load=False, save=True, name=None, mode="kaggle"):
 
 	netG = Generator().to(device)
+	netG.apply(weights_init)
+
 	netD = Discriminator().to(device)
+	netD.apply(weights_init)
 
 	model = {
 		"discriminator": netD,
 		"generator": netG
 	}
-	lr = 0.0001
+	lr = 0.0002
 
 	optimizer = {
 		"discriminator": torch.optim.Adam(model["discriminator"].parameters(),
@@ -160,13 +148,32 @@ def train():
 									  lr=lr, betas=(0.5, 0.999))
 	}
 
+	Buffer = ImageBuffer(bufsize=1024)
+
+	if load:
+		checkpoint_gen = torch.load("/kaggle/input/model-stat-new/generator_50_55.pth", map_location=device)
+		checkpoint_disc = torch.load("/kaggle/input/model-stat-new/discriminator_50_55.pth", map_location=device)
+
+		model["generator"].load_state_dict(checkpoint_gen["model_dict"])
+		optimizer["generator"].load_state_dict(checkpoint_gen["optimizer"])
+
+		model["discriminator"].load_state_dict(checkpoint_disc["model_dict"])
+		optimizer["discriminator"].load_state_dict(checkpoint_disc["optimizer"])
+
+	stat = fit(model, optimizer, epochs, lr, Buffer, path_dataset=path_dataset, save=save, name=name, mode=mode)
+
+	return stat
+
+if __name__=="__main__":
+
 	epochs = 50
+	name = ("generator_0_50.pth", "discriminator_0_50.pth")
+	path_data = "/kaggle/input"
 
-	checkpoint_gen = torch.load("/kaggle/input/model-stat-new/generator_50_55.pth", map_location=device)
-	checkpoint_disc = torch.load("/kaggle/input/model-stat-new/discriminator_50_55.pth", map_location=device)
-
-	model["generator"].load_state_dict(checkpoint_gen["model_dict"])
-	optimizer["generator"].load_state_dict(checkpoint_gen["optimizer"])
-
-	model["discriminator"].load_state_dict(checkpoint_disc["model_dict"])
-	optimizer["discriminator"].load_state_dict(checkpoint_disc["optimizer"])
+	train(epochs,
+		  load=False,
+		  save=True,
+		  name=name,
+		  path_dataset=path_data,
+		  mode="kaggle",
+		  folder=True)

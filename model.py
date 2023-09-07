@@ -15,7 +15,7 @@ import numpy as np
 #import seaborn as sns
 import os
 
-
+latent_size = 128
 
 class Generator(nn.Module):
 	def __init__(self):
@@ -101,8 +101,8 @@ class Discriminator(nn.Module):
 
 			GaussianNoise(),
 			nn.Conv2d(512, 1, kernel_size=4, stride=1, padding=0, bias=False),
+			nn.Sigmoid(),
 			# out: 1 x 1 x 1
-
 			nn.Flatten()
 		)
 
@@ -153,3 +153,11 @@ class ImageBuffer:
                     return_images.append(img_return)
                     self.buff[idx] = image
         return torch.stack(return_images, dim=0)
+
+def weights_init(m):
+    classname = m.__class__.__name__
+    if classname.find('Conv') != -1:
+        nn.init.normal_(m.weight.data, 0.0, 0.02)
+    elif classname.find('BatchNorm') != -1:
+        nn.init.normal_(m.weight.data, 1.0, 0.02)
+        nn.init.constant_(m.bias.data, 0)
